@@ -1,0 +1,34 @@
+server:
+  # Hugging Face Docker Spaces expect the application on port 7860.
+  port: ${PORT:7860}
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: java-code-reviewer
+  ai:
+    openai:
+      # Any OpenAI-compatible provider. Default: OpenRouter, free open-weights model.
+      # Hugging Face router: REVIEWER_BASE_URL=https://router.huggingface.co/v1 and an hf_ token.
+      base-url: ${REVIEWER_BASE_URL:https://openrouter.ai/api/v1}
+      # Set REVIEWER_API_KEY in the Space secrets (or your shell).
+      api-key: ${REVIEWER_API_KEY:${HF_TOKEN:missing}}
+      chat:
+        options:
+          model: ${REVIEWER_MODEL:nvidia/nemotron-3-ultra-550b-a55b:free}
+          temperature: 0.1
+    mcp:
+      server:
+        name: java-code-reviewer
+        version: 0.1.0
+        protocol: streamable
+        type: sync
+
+reviewer:
+  provider-name: ${REVIEWER_PROVIDER_NAME:OpenRouter}
+  reviews-per-caller-per-day: ${REVIEWS_PER_CALLER_PER_DAY:5}
+  reviews-per-day: ${REVIEWS_PER_DAY:40}
+
+logging:
+  level:
+    root: info

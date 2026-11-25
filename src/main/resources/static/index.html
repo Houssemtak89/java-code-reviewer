@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Java code reviewer</title>
+<style>
+  :root { --ink:#1d2433; --muted:#5b6475; --line:#dfe3ea; --bg:#f7f8fa; --accent:#1f5fa8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width:960px; margin:0 auto; padding:32px 20px 56px; }
+  h1 { font-size:26px; margin:0 0 4px; font-weight:650; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  textarea { width:100%; min-height:300px; font:14px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; padding:12px; border:1px solid var(--line); border-radius:10px; background:#fff; resize:vertical; }
+  .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:12px 0 24px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 20px; font-size:15px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:wait; }
+  details { color:var(--muted); font-size:14px; }
+  details input { width:320px; max-width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; margin-top:6px; }
+  .count { color:var(--muted); font-size:14px; margin-left:auto; }
+  .summary { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin-bottom:12px; }
+  .finding { background:#fff; border:1px solid var(--line); border-left:4px solid var(--line); padding:12px 16px; margin-bottom:10px; border-radius:0; }
+  .finding.BLOCKER { border-left-color:#c0392b; } .finding.MAJOR { border-left-color:#e67e22; }
+  .finding.MINOR { border-left-color:#2e86c1; } .finding.INFO { border-left-color:#95a5a6; }
+  .tag { font-size:12px; font-weight:600; letter-spacing:.02em; color:var(--muted); }
+  .finding p { margin:6px 0 0; }
+  pre.fix { white-space:pre-wrap; background:var(--bg); padding:8px 10px; border-radius:6px; font-size:13.5px; margin:8px 0 0; }
+  .error { color:#a3261c; }
+  footer { margin-top:40px; color:var(--muted); font-size:13.5px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Java code reviewer</h1>
+  <p class="sub">Paste a Java method or class (200 lines at most). An open source code model reviews it: bugs, concurrency, security, performance, design, tests.</p>
+
+  <textarea id="code" spellcheck="false" placeholder="public BigDecimal total(List&lt;Line&gt; lines) { ... }"></textarea>
+  <div class="row">
+    <button id="go">Review</button>
+    <details>
+      <summary>Use my own <span class="provider">provider</span> API key</summary>
+      <input id="token" type="password" autocomplete="off" placeholder="API key">
+      <div>Your reviews then use your own credit and skip the daily limit. The key is sent with the request only, never stored.</div>
+    </details>
+    <span class="count" id="count">0 / 200 lines</span>
+  </div>
+
+  <div id="result" aria-live="polite"></div>
+
+  <footer>
+    Spring Boot and Spring AI. Model: <span id="model">open-weights model</span>, served by <span class="provider">the provider</span>. Also available as an MCP server at <code>/mcp</code>, tool <code>review_java_code</code>.
+    The code you paste is sent to the model and not kept.
+    Source: <a href="https://github.com/Houssemtak89/java-code-reviewer">github.com/Houssemtak89/java-code-reviewer</a>
+  </footer>
+</main>
+<script>
+  const code = document.getElementById('code');
+  const go = document.getElementById('go');
+  const result = document.getElementById('result');
+  const count = document.getElementById('count');
+
+  fetch('api/info').then(r => r.json()).then(info => {
+    document.querySelectorAll('.provider').forEach(e => e.textContent = info.provider);
+    document.getElementById('model').textContent = info.model;
+  }).catch(() => {});
+
+  code.addEventListener('input', () => {
+    count.textContent = (code.value ? code.value.split(/\r?\n/).length : 0) + ' / 200 lines';
+  });
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  go.addEventListener('click', async () => {
+    result.replaceChildren();
+    if (!code.value.trim()) {
+      result.append(el('p', 'error', 'Paste some Java code first.'));
+      return;
+    }
+    go.disabled = true;
+    go.textContent = 'Reviewing…';
+    const headers = { 'Content-Type': 'application/json' };
+    const token = document.getElementById('token').value.trim();
+    if (token) headers['X-Api-Key'] = token;
+    try {
+      const res = await fetch('api/review', { method: 'POST', headers, body: JSON.stringify({ code: code.value }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        result.append(el('p', 'error', body.detail || 'The review failed. Try again.'));
+        return;
+      }
+      result.append(el('div', 'summary', body.summary || 'Review done.'));
+      if (!body.findings || body.findings.length === 0) {
+        result.append(el('p', null, 'No problem found.'));
+      }
+      for (const f of body.findings || []) {
+        const card = el('div', 'finding ' + f.severity);
+        card.append(el('div', 'tag', f.severity + ' · ' + f.category + (f.line ? ' · line ' + f.line : '')));
+        card.append(el('p', null, f.message));
+        if (f.suggestion) card.append(el('pre', 'fix', f.suggestion));
+        result.append(card);
+      }
+    } catch (e) {
+      result.append(el('p', 'error', 'The server cannot be reached. Try again in a minute.'));
+    } finally {
+      go.disabled = false;
+      go.textContent = 'Review';
+    }
+  });
+</script>
+</body>
+</html>
