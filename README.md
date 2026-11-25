@@ -14,6 +14,14 @@ short_description: Review a piece of Java code with an open source model
 
 Paste a Java method or class and an open source code model reviews it: bugs, concurrency, security, performance, design, readability, and the tests worth writing. Each finding has a severity, a line and a concrete fix.
 
+**Try it: https://java-code-reviewer.onrender.com** (free hosting: after a quiet spell the first visit takes about a minute to wake the service).
+
+Use it from Claude Code as an MCP server:
+
+```bash
+claude mcp add --transport http java-reviewer https://java-code-reviewer.onrender.com/mcp
+```
+
 The same review is available three ways:
 - a web page;
 - a REST endpoint, `POST /api/review`;
@@ -56,11 +64,17 @@ export REVIEWER_API_KEY=sk-or-... # an OpenRouter key (free models need no credi
 
 Settings, all optional: `REVIEWER_MODEL`, `REVIEWER_BASE_URL`, `REVIEWER_PROVIDER_NAME`, `REVIEWS_PER_CALLER_PER_DAY`, `REVIEWS_PER_DAY`.
 
-Use it from Claude Code as an MCP server:
+Use the local run from Claude Code:
 
 ```bash
 claude mcp add --transport http java-reviewer http://localhost:7860/mcp
 ```
+
+## Deploy it
+
+- **Render** (free web service): `render.yaml` is a Blueprint. Render builds the `Dockerfile` and asks for `REVIEWER_API_KEY`.
+- **Any container host**: `docker build -t java-code-reviewer .` then run it with `REVIEWER_API_KEY` set; it listens on `PORT` (7860 by default).
+- The front matter at the top of this file is for a Hugging Face Docker Space (Hugging Face asks for a PRO subscription to host one).
 
 ## Tests
 
